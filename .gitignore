@@ -1,0 +1,11 @@
+node_modules
+dist
+git
+
+.vscode
+.idea
+.DS_Store
+.coverage
+.cache
+.eslintcache
+*/.DS_Store
