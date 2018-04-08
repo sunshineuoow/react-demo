@@ -1,5 +1,8 @@
+var REACT_ELEMENT_TYPE = require('../../utils/ReactElementSymbol')
+
 var ReactElement = function(type, props) {
   var element = {
+    $$typeof: REACT_ELEMENT_TYPE,
     type: type,
     props: props
   }
@@ -30,6 +33,13 @@ ReactElement.createElement = function(type, config, children) {
   return ReactElement(
     type,
     props
+  )
+}
+
+ReactElement.isValidElement = function(object) {
+  return (
+    typeof object === 'object' &&
+    object !== null
   )
 }
 
