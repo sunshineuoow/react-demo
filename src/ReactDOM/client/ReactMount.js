@@ -1,40 +1,20 @@
 // React将虚拟dom挂载到dom树的核心
-
+var DOMLazyTree = require('../client/utils/DOMLazyTree')
+var DOMproperty = require('../shared/DOMProperty')
 var React = require('../../React/React')
+var ReactDOMComponentTree = require('./ReactDOMComponentTree')
 var ReactDOMContainerInfo = require('../shared/ReactDOMContainerInfo')
+var ReactDOMFeatureFlags = require('../shared/ReactDOMFeatureFlags')
 var ReactReconciler = require('../shared/recociler/ReactReconciler')
+var ReactUpdateQueue = require('../shared/recociler/ReactUpdateQueue')
+var ReactUpdates = require('../shared/recociler/ReactUpdates')
+
 var instantiateReactComponent = require('../shared/recociler/instantiateReactComponent')
 var setInnerHTML = require('../../utils/setInnerHTML')
 
+var ATTR_NAME = DOMproperty.ID_ATTRIBUTE_NAME
+
 var instancesByReactRootID = {}
-
-// 将组件挂载到节点上
-function mountComponentIntoNode(
-  wrapperInstance,
-  container,
-) {
-  var markup = ReactReconciler.mountComponent(
-    wrapperInstance,
-    null,
-    ReactDOMContainerInfo(wrapperInstance, container),
-    0
-  )
-
-  wrapperInstance._renderedComponent._topLevelWrapper = wrapperInstance
-  ReactMount._mountImageIntoNode(
-    markup,
-    container,
-    wrapperInstance,
-  )
-}
-
-// 批量将组件挂载至节点，调用mountComponentIntoNode方法
-function batchedMountComponentIntoNode(
-  componentInstance,
-  container,
-) {
-  mountComponentIntoNode(componentInstance, container)
-}
 
 function getReactRootElementInContainer(container) {
   if (!container) {
@@ -45,6 +25,64 @@ function getReactRootElementInContainer(container) {
     return container.documentElement
   } else {
     return container.firstChild
+  }
+}
+
+function internalGetID(node) {
+  return (node.getAttribute && node.getAttribute(ATTR_NAME)) || ''
+}
+
+// 将组件挂载到节点上
+function mountComponentIntoNode(
+  wrapperInstance,
+  container,
+  transaction, 
+  shouldReuseMarkup 
+) {
+  var markup = ReactReconciler.mountComponent(
+    wrapperInstance,
+    transaction,
+    null,
+    ReactDOMContainerInfo(wrapperInstance, container),
+    0
+  )
+
+  wrapperInstance._renderedComponent._topLevelWrapper = wrapperInstance
+  ReactMount._mountImageIntoNode(
+    markup,
+    container,
+    wrapperInstance,
+    shouldReuseMarkup,
+    transaction
+  )
+}
+
+// 批量将组件挂载至节点，调用mountComponentIntoNode方法
+function batchedMountComponentIntoNode(
+  componentInstance,
+  container,
+  shouldReuseMarkup
+) {
+  var transaction = ReactUpdates.ReactReconcileTransaction.getPooled(
+    !shouldReuseMarkup && ReactDOMFeatureFlags.useCreateElement,
+  )
+  transaction.perform(
+    mountComponentIntoNode,
+    null,
+    componentInstance,
+    container,
+    transaction,
+    shouldReuseMarkup
+  )
+
+  ReactUpdates.ReactReconcileTransaction.release(transaction)
+}
+
+function hasNonRootReactChild(container) {
+  var rootEl = getReactRootElementInContainer(container)
+  if (rootEl) {
+    var inst = ReactDOMComponentTree.getInstanceFromNode(rootEl)
+    return !!(inst && inst._hostParent)
   }
 }
 
@@ -66,13 +104,19 @@ var ReactMount = {
   _renderNewRootComponent: function(
     nextElement,
     container,
+    shouldReuseMarkup
   ) {
     var componentInstance = instantiateReactComponent(nextElement, false)
 
-    console.log(componentInstance, 'react Mount')
+    ReactUpdates.batchedUpdates(
+      batchedMountComponentIntoNode,
+      componentInstance,
+      container,
+      shouldReuseMarkup
+    )
 
-
-    batchedMountComponentIntoNode(componentInstance, container)
+    var wrapperID = componentInstance._instance.rootID
+    instancesByReactRootID[wrapperID] = componentInstance
 
     return componentInstance
   },
@@ -90,11 +134,22 @@ var ReactMount = {
 
     var prevComponent = getReactRootElementInContainer(container)
 
+    
     var reactRootElement = getReactRootElementInContainer(container)
+    var contanierHasReactMarkup =
+      reactRootElement && !!internalGetID(reactRootElement)
+    var containerHasNonRootReactChild = hasNonRootReactChild(container)
+    
+    var shouldReuseMarkup = 
+      contanierHasReactMarkup &&
+      !prevComponent &&
+      !containerHasNonRootReactChild
+      
     var component = ReactMount._renderNewRootComponent(
       nextWrappedElement,
-      container
-    )
+      container,
+      shouldReuseMarkup,
+    )._renderedComponent
 
 
     if (callback) {
@@ -115,9 +170,25 @@ var ReactMount = {
 
   _mountImageIntoNode: function(
     markup,
-    container
+    container,
+    instance,
+    shouldReuseMarkup,
+    transaction
   ) {
-    setInnerHTML(container, markup)
+
+    if (shouldReuseMarkup) {
+
+    }
+    
+    if (transaction.useCreateElement) {
+      while (container.lastChild) {
+        container.removeChild(container.lastChild)
+      }
+      DOMLazyTree.insertTreeBefore(container, markup, null)
+    } else {
+      setInnerHTML(container, markup)
+      ReactDOMComponentTree.precacheNode(instance, container.firstChild)
+    }
   }
 }
 

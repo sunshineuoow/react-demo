@@ -1,18 +1,56 @@
-// 调用组件实例的mountComponent方法，将其挂载至dom
+/**
+ * React的调解中心，用于触发组件的挂载及更新方法
+ */
+
 var ReactReconciler = {
   mountComponent: function(
     internalInstance,
+    transaction,
     hostParent,
     hostContainerInfo,
   ) {
-    console.log(internalInstance)
     var markup = internalInstance.mountComponent(
+      transaction,
       hostParent,
       hostContainerInfo,
     )
 
-    console.log(markup, 'markup')
     return markup
+  },
+
+  getHostNode: function(internalInstance) {
+    return internalInstance.getHostNode()
+  },
+
+  unmountComponent: function(internalInstance, safely) {
+    internalInstance.unmountComponent(safely)
+  },
+
+  receiveComponent: function(
+    internalInstance,
+    nextElement,
+    transaction
+  ) {
+    var prevElement = internalInstance._currentElement
+
+    if (nextElement === prevElement) {
+      return
+    }
+
+    internalInstance.receiveComponent(nextElement, transaction)
+
+  },
+
+  performUpdateIfNecessary: function(
+    internalInstance,
+    transaction,
+    updateBatchNumber
+  ) {
+    if (internalInstance._updateBatchNumber !== updateBatchNumber) {
+      return
+    }
+
+    internalInstance.performUpdateIfNecessary(transaction)
   }
 
 }
