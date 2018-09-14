@@ -19,6 +19,11 @@
     "babel-core": "^6.26.0",
     "babel-plugin-transform-react-jsx": "^6.24.1",
     "babel-preset-env": "^1.6.1",
+    "fbjs": "^0.8.17",
     "parcel-bundler": "^1.6.2"
+  },
+  "dependencies": {
+    "react": "^15.6.2",
+    "react-dom": "^15.6.2"
   }
 }

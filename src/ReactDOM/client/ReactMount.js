@@ -179,7 +179,6 @@ var ReactMount = {
     if (shouldReuseMarkup) {
 
     }
-    
     if (transaction.useCreateElement) {
       while (container.lastChild) {
         container.removeChild(container.lastChild)

@@ -7,8 +7,11 @@ var ReactDOMComponentFlags = require('./ReactDOMComponentFlags')
 var ReactDOMComponentTree = require('../client/ReactDOMComponentTree')
 var ReactMultiChild = require('./recociler/ReactMultiChild')
 
+var invariant = require('fbjs/lib/invariant')
+
 var Flags = ReactDOMComponentFlags
 
+// 为了快速匹配children的类型，测试是否可以被当成内容
 var CONTENT_TYPES = {string: true, number: true}
 
 var STYLE = 'style'
@@ -19,14 +22,39 @@ var RESERVED_PROPS = {
   suppressContentEditableWarning: null
 }
 
+var VALID_TAG_REGEX = /^[a-zA-Z][a-zA-Z:_\.\-\d]*$/ // 简化的标签测试正则
+var validatedTagCache = {}
+var hasOwnProperty = {}.hasOwnProperty
+
+function validateDangerousTag(tag) {
+  if (!hasOwnProperty.call(validatedTagCache, tag)) {
+    invariant(VALID_TAG_REGEX.test(tag), 'Invalid tag: %s', tag)
+    validatedTagCache[tag] = true
+  }
+}
+
 function isCustomComponent(tagName, props) {
   return tagName.indexOf('-') >= 0 || props.is != null
 }
 
 var globalIdCounter = 1
 
+/**
+ * 创建一个新的纯的(该构造函数为纯函数)并且能够包含其他React组件的React类。接受事件监听者和根据`DOMProperty`来判断有效的DOM属性
+ * 拓展ReactMultiChild
+ *
+ *  - Event listeners: `onClick`, `onMouseDown`, etc.
+ *  - DOM properties: `className`, `name`, `title`, etc.
+ *
+ * The `style` property functions differently from the DOM API. It accepts an
+ * object mapping of style properties to values.
+ *
+ * @constructor ReactDOMComponent
+ * @extends ReactMultiChild
+ */
 function ReactDOMComponent(element) {
   var tag = element.type
+  validateDangerousTag(tag)
   this._currentElement = element
   this._tag = tag.toLowerCase()
   this._namespaceURI = null
@@ -38,16 +66,29 @@ function ReactDOMComponent(element) {
   this._rootNodeID = 0
   this._domID = 0
   this._hostContainerInfo = null
+  this._wrapperState = null
   this._topLevelWrapper = null
+  this._flags = 0
 }
 
 ReactDOMComponent.displayName = 'ReactDOMComponent'
 
 ReactDOMComponent.Mixin = {
+  /**
+   * 生成一个根节点的标记(markup)然后递归，这个方法有副作用，不是一个纯函数
+   *
+   * @internal
+   * @param {ReactReconcileTransaction|ReactServerRenderingTransaction} transaction
+   * @param {?ReactDOMComponent} hostParent 父组件实例
+   * @param {?object} hostContainerInfo 关于宿主容器的信息
+   * @param {object} context
+   * @return {string} 计算出来的标记(markup)
+   */
   mountComponent: function(
     transaction,
     hostParent,
     hostContainerInfo,
+    context
   ) {
     this._rootNodeId = globalIdCounter++
     this._domID = hostContainerInfo._idCounter++
@@ -56,6 +97,7 @@ ReactDOMComponent.Mixin = {
 
     var props = this._currentElement.props
 
+    // 我们在父容器的命名空间内创建标签，除了HTML标签外，因为它没有命名空间
     var namespaceURI
     var parentTag
     if (hostParent !== null) {
@@ -94,6 +136,7 @@ ReactDOMComponent.Mixin = {
         } else if (props.is) {
           el = ownerDocument.createElement(this._currentElement.type, props.is)
         } else {
+          // FIX: firefox下当props.is为 undefined || null 时会导致节点上添加is="null||undefined"
           el = ownerDocument.createElement(this._currentElement.type)
         }
       } else {

@@ -1,7 +1,13 @@
 import React from './React/React'
 import ReactDOM from './ReactDOM/ReactDOM'
+// import React from 'react'
+// import ReactDOM from 'react-dom'
 
 var flag = true
+
+const Test = () => (
+  <div>test</div>
+)
 
 class HelloWorld extends React.Component {
   constructor(props) {
@@ -10,23 +16,30 @@ class HelloWorld extends React.Component {
       text: 111
     }
   }
-  render() {
+
+  componentWillMount() {
+    this.setState({ text: 222 })
+  }
+
+  componentDidMount() {
+    console.log('mount')
     setTimeout(() => {
-      if (flag) {
-        this.setState({text: 222})
-        flag = false        
-      }
-    }, 2000)
+      this.setState({text: 333})
+    }, 1000)
+  }
+
+  render() {
     return (
       <div>
         <div>{this.state.text}</div>
         <div>{new Date().toLocaleTimeString()}</div>
+        <Test/>
       </div>
     )
   }
 }
 
 ReactDOM.render(
- <HelloWorld />,
+  <HelloWorld />,
   document.getElementById('container')
 )
