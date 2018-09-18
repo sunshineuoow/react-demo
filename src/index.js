@@ -13,7 +13,8 @@ class HelloWorld extends React.Component {
   constructor(props) {
     super(props)
     this.state = {
-      text: 111
+      text: 111,
+      value: ''
     }
   }
 
@@ -23,9 +24,18 @@ class HelloWorld extends React.Component {
 
   componentDidMount() {
     console.log('mount')
+    console.log(this.refs.input)
     setTimeout(() => {
       this.setState({text: 333})
     }, 1000)
+  }
+
+  componentWillUpdate() {
+    console.log('will update')
+  }
+
+  componentDidUpdate() {
+    console.log('did update')
   }
 
   render() {
@@ -33,6 +43,7 @@ class HelloWorld extends React.Component {
       <div>
         <div>{this.state.text}</div>
         <div>{new Date().toLocaleTimeString()}</div>
+        <input type="text" ref="input" value={this.state.value} />
         <Test/>
       </div>
     )

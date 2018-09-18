@@ -10,6 +10,7 @@ var ReactMultiChild = require('./recociler/ReactMultiChild')
 var invariant = require('fbjs/lib/invariant')
 
 var Flags = ReactDOMComponentFlags
+var getNode = ReactDOMComponentTree.getNodeFromInstance
 
 // 为了快速匹配children的类型，测试是否可以被当成内容
 var CONTENT_TYPES = {string: true, number: true}
@@ -364,6 +365,10 @@ ReactDOMComponent.Mixin = {
     } else if (nextChildren != null) {
       this.updateChildren(nextChildren, transaction)
     }
+  },
+
+  getPublicInstance: function() {
+    return getNode(this)
   }
 }
 

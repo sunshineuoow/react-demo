@@ -1,4 +1,7 @@
 // jsx 通过 createElement 方法转换为 React的Element
+
+var ReactCurrentOwner = require('./ReactCurrentOwner')
+
 var REACT_ELEMENT_TYPE = require('../../utils/ReactElementSymbol')
 
 var RESERVED_PROPS = {
@@ -77,13 +80,22 @@ ReactElement.createElement = function(type, config, children) {
     props.children = childArray
   }
 
+  if (type && type.defaultProps) {
+    var defaultProps = type.defaultProps
+    for (propName in defaultProps) {
+      if (props[propName] === undefined) {
+        props[propName] = defaultProps[propName]
+      }
+    }
+  }
+
   return ReactElement(
     type,
     key,
     ref,
     self,
     source,
-    null,
+    ReactCurrentOwner.current,
     props
   )
 }

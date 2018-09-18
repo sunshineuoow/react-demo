@@ -1,4 +1,5 @@
 var React = require('../../../React/React')
+var ReactComponentEnvironment = require('./ReactComponentEnvironment')
 var ReactCurrentOwner = require('../../../React/element/ReactCurrentOwner')
 var ReactInstanceMap = require('../shared/ReactInstanceMap')
 var ReactNodeTypes = require('./ReactNodeTypes')
@@ -17,7 +18,8 @@ var CompositeTypes = {
 
 function StatelessComponent(Component) {}
 StatelessComponent.prototype.render = function() {
-  var element = Compnent(this.props, this.context, this.updater)
+  var Component = ReactInstanceMap.get(this)._currentElement.type
+  var element = Component(this.props, this.context, this.updater)
   return element
 }
 
@@ -28,6 +30,34 @@ function shouldConstruct(Component) {
 function isPureComponent(Component) {
   return !!(Component.prototype && Component.prototype.isPureReactComponent)
 }
+
+/**
+ * ------------------ 组合组件的生命周期 ------------------
+ *
+ * - 构造器：初始化state。实例现在被保留。
+ *   - componentWillMount
+ *   - render
+ *   - [children's constructors]
+ *     - [children's componentWillMount and render]
+ *     - [children's componentDidMount]
+ *     - componentDidMount
+ *
+ *       Update Phases:
+ *       - componentWillReceiveProps (only called if parent updated)
+ *       - shouldComponentUpdate
+ *         - componentWillUpdate
+ *           - render
+ *           - [children's constructors or receive props phases]
+ *         - componentDidUpdate
+ *
+ *     - componentWillUnmount
+ *     - [children's componentWillUnmount]
+ *   - [children destroyed]
+ * - (destroyed): The instance is now blank, released by React and ready for GC.
+ *
+ * -----------------------------------------------------------------------------
+ */
+
 
 /**
  * 当组件挂载时给予一个递增的ID。这用来确保`ReactUpdates`更新脏组件的顺序
@@ -383,10 +413,37 @@ var ReactCompositeComponent = {
     return maskedContext
   },
 
+  /**
+   * 过滤context对象，仅保留`contextTypes`内包含的key，并且校验是否合法。
+   *
+   * @param {object} context
+   * @return {?object}
+   * @private
+   */
   _processContext: function(context) {
     var maskedContent = this._maskContext(context)
 
     return maskedContent
+  },
+
+  /**
+   * @param {object} currentContext
+   * @return {object}
+   * @private
+   */
+  _processChildContext: function(currentContext) {
+    var Component = this._currentElement.type
+    var inst = this._instance
+    var childContext
+
+    if (inst.getChildContext) {
+      childContext = inst.getChildContext()
+    }
+
+    if (childContext) {
+      return Object.assign({}, currentContext, childContext)
+    }
+    return currentContext
   },
 
   receiveComponent: function(nextElement, transaction, nextContext) {
@@ -404,18 +461,27 @@ var ReactCompositeComponent = {
     )
   },
 
+  /**
+   * 如果`_pendingElement`, `_pendingStateQueue`或者`_pendingForceUpdate`任何一个被设置，更新组件
+   *
+   * @param {ReactReconcileTransaction} transaction
+   * @internal
+   */
   performUpdateIfNecessary: function(transaction) {
     if (this._pendingElement != null) {
       ReactReconciler.receiveComponent(
         this,
         this._pendingElement,
         transaction,
+        this._context
       )
     } else if (this._pendingStateQueue !== null || this._pendingForceUpdate) {
       this.updateComponent(
         transaction,
         this._currentElement,
         this._currentElement,
+        this._context,
+        this._context
       )
     } else {
       this._updateBatchNumber = null
@@ -537,23 +603,73 @@ var ReactCompositeComponent = {
     return nextState
   },
 
+  /**
+   * 合并新的props和state，通知委托更新方法并且执行更新
+   * Merges new props and state, notifies delegate methods of update and
+   * performs update.
+   *
+   * @param {ReactElement} nextElement Next element
+   * @param {object} nextProps Next public object to set as properties.
+   * @param {?object} nextState Next object to set as state.
+   * @param {?object} nextContext Next public object to set as context.
+   * @param {ReactReconcileTransaction} transaction
+   * @param {?object} unmaskedContext
+   * @private
+   */
   _performComponentUpdate: function(
     nextElement,
     nextProps,
     nextState,
-    transaction
+    nextContext,
+    transaction,
+    unmaskedContext
   ) {
     var inst = this._instance
 
+    var hasComponentDidUpdate = Boolean(inst.componentDidUpdate)
+    var prevProps
+    var prevState
+    var prevContext
+    if (hasComponentDidUpdate) {
+      prevProps = inst.props
+      prevState = inst.state
+      prevContext = inst.context
+    }
+
+    if(inst.componentWillUpdate) {
+      inst.componentWillUpdate(nextProps, nextState, nextContext)
+    }
+
     this._currentElement = nextElement
+    this._context = unmaskedContext
     inst.props = nextProps
     inst.state = nextState
+    inst.context = nextContext
 
-    this._updateRenderedComponent(transaction)
+    this._updateRenderedComponent(transaction, unmaskedContext)
 
+    if (hasComponentDidUpdate) {
+      transaction
+        .getReactMountReady()
+        .enqueue(
+          inst.componentDidUpdate.bind(
+            inst,
+            prevProps,
+            prevState,
+            prevContext
+          ),
+          inst
+        )
+    }
   },
 
-  _updateRenderedComponent: function(transaction) {
+  /**
+   * 调用组件的render方法从而更新DOM
+   *
+   * @param {ReactReconcileTransaction} transaction
+   * @internal
+   */
+  _updateRenderedComponent: function(transaction, context) {
     var prevComponentInstance = this._renderedComponent
     var prevRenderedElement = prevComponentInstance._currentElement
     var nextRenderedElement = this._renderValidatedComponent()
@@ -564,7 +680,8 @@ var ReactCompositeComponent = {
       ReactReconciler.receiveComponent(
         prevComponentInstance,
         nextRenderedElement,
-        transaction
+        transaction,
+        this._processChildContext(context)
       )
     } else {
       var oldHostNode = ReactReconciler.getHostNode(prevComponentInstance)
@@ -582,7 +699,9 @@ var ReactCompositeComponent = {
         child,
         transaction,
         this._hostParent,
-        this._hostContainerInfo
+        this._hostContainerInfo,
+        this._processChildContext(context),
+        debugID
       )
 
       this._replaceNodeWithMarkup(
@@ -591,9 +710,25 @@ var ReactCompositeComponent = {
         prevComponentInstance
       )
     }
-    
   },
 
+  /**
+   * 重写浅渲染
+   *
+   * @protected
+   */
+  _replaceNodeWithMarkup: function(oldHostNode, nextMarkup, prevInstance) {
+    ReactComponentEnvironment.replaceNodeWithMarkup(
+      oldHostNode,
+      nextMarkup,
+      prevInstance
+    )
+  },
+
+
+  /**
+   * @protected
+   */
   _renderValidatedComponentWithoutOwnerOrContext() {
     var inst = this._instance
     var renderedElement
@@ -604,14 +739,85 @@ var ReactCompositeComponent = {
     return renderedElement
   },
 
+  /**
+   * @protected
+   */
   _renderValidatedComponent: function() {
     var renderedElement
+    if (this._compositeType !== CompositeTypes.StatelessFunctional) {
+      ReactCurrentOwner.current = this
+      try {
+        renderedElement = this._renderValidatedComponentWithoutOwnerOrContext()
+      } finally {
+        ReactCurrentOwner.current = null
+      }
+    } else {
+      renderedElement = this._renderValidatedComponentWithoutOwnerOrContext()
+    }
 
-    renderedElement = this._renderValidatedComponentWithoutOwnerOrContext()
 
     return renderedElement
   },
 
+  /**
+   * 惰性分配refs对象并且将组件保存为ref
+   *
+   * @param {string} ref 引用名.
+   * @param {component} component 作为ref存储的组件.
+   * @final
+   * @private
+   */
+  attachRef: function(ref, component) {
+    var inst = this.getPublicInstance()
+    var publicComponentInstance = component.getPublicInstance()
+    var refs = inst.refs = emptyObject ? (inst.refs = {}) : inst.refs
+    refs[ref] = publicComponentInstance
+  },
+
+  /**
+   * 删除引用名.
+   *
+   * @param {string} ref 解除引用的名称
+   * @final
+   * @private
+   */
+  detachRef: function(ref) {
+    var refs = this.getPublicInstance().refs
+    delete refs[ref]
+  },
+
+  /**
+   * 获取组件的文本描述用于在错误信息中标识
+   * @return {string} The name or null.
+   * @internal
+   */
+  getName: function() {
+    var type = this._currentElement.type
+    var constructor = this._instance && this._instance.constructor
+    return (
+      type.displayName ||
+      (constructor && constructor.displayName) ||
+      type.name ||
+      (constructor && constructor.name) ||
+      null
+    )
+  },
+
+  /**
+   * 获取这个组件的公开访问的表示形式 - 即由refs公开并且由render返回的内容。无状态组件可以返回null。
+   *
+   * @return {ReactComponent} the public component instance.
+   * @internal
+   */
+  getPublicInstance: function() {
+    var inst = this._instance
+    if (this._compositeType === CompositeTypes.StatelessFunctional) {
+      return null
+    }
+    return inst
+  },
+
+  // 存根
   _instantiateReactComponent: null
 }
 
