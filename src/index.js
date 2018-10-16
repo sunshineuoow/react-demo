@@ -1,5 +1,5 @@
 import React from './React/React'
-import ReactDOM from './ReactDOM/ReactDOM'
+import ReactDOM from './renderers/ReactDOM/ReactDOM'
 // import React from 'react'
 // import ReactDOM from 'react-dom'
 
@@ -40,8 +40,11 @@ class HelloWorld extends React.Component {
 
   render() {
     return (
-      <div>
-        <div>{this.state.text}</div>
+      <div id="test">
+        <div onClick={() => {
+          console.log('click')
+          this.setState({text: 444})
+        }}>{this.state.text}</div>
         <div>{new Date().toLocaleTimeString()}</div>
         <input type="text" ref="input" value={this.state.value} />
         <Test/>
