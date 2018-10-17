@@ -93,6 +93,18 @@ function getClosestInstanceFromNode(node) {
  * 给出一个DOM节点，返回ReactDOMComponent或者ReactDOMTextComponent实例，
  * 或者null如果该节点不是React渲染的
  */
+function getInstanceFromNode(node) {
+  var inst = getClosestInstanceFromNode(node)
+  if (inst != null && inst._hostNode === node) {
+    return inst
+  } else {
+    return null
+  }
+}
+
+/**
+ * 给出一个ReactDOM组件或者ReactDOMText组件，返回相应的DOM节点
+ */
 function getNodeFromInstance(inst) {
   if (inst._hostNode) {
     return inst._hostNode

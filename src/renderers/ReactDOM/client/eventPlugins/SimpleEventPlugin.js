@@ -1,8 +1,16 @@
 var EventListener = require('fbjs/lib/EventListener')
 var EventPropagators = require('../../../shared/stack/event/EventPropagators')
 var ReactDOMComponentTree = require('../ReactDOMComponentTree')
+var SyntheticAnimationEvent = require('../syntheticEvents/SyntheticAnimationEvent')
+var SyntheticClipboardEvent = require('../syntheticEvents/SyntheticClipboardEvent')
 var SyntheticEvent = require('../../../shared/stack/event/SyntheticEvent')
+var SyntheticFocusEvent = require('../syntheticEvents/SyntheticFocusEvent')
 var SyntheticMouseEvent = require('../syntheticEvents/SyntheticMouseEvent')
+var SyntheticDragEvent = require('../syntheticEvents/SyntheticDragEvent')
+var SyntheticTouchEvent = require('../syntheticEvents/SyntheticTouchEvent')
+var SyntheticTransitionEvent = require('../syntheticEvents/SyntheticTransactionEvent')
+var SyntheticUIEvent = require('../syntheticEvents/SyntheticUIEvent')
+var SyntheticWheelEvent = require('../syntheticEvents/SyntheticWheelEvent')
 
 var emptyFunction = require('fbjs/lib/emptyFunction')
 

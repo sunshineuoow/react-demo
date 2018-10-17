@@ -5,9 +5,22 @@ import ReactDOM from './renderers/ReactDOM/ReactDOM'
 
 var flag = true
 
-const Test = () => (
-  <div>test</div>
-)
+const Test = () => <div>test</div>
+
+class ChildComponent extends React.Component {
+  constructor(props) {
+    super(props)
+    this.state = {}
+  }
+
+  componentDidMount() {
+    console.log('mount Child')
+  }
+
+  render() {
+    return <div>child</div>
+  }
+}
 
 class HelloWorld extends React.Component {
   constructor(props) {
@@ -26,7 +39,7 @@ class HelloWorld extends React.Component {
     console.log('mount')
     console.log(this.refs.input)
     setTimeout(() => {
-      this.setState({text: 333})
+      this.setState({ text: 333 })
     }, 1000)
   }
 
@@ -41,13 +54,18 @@ class HelloWorld extends React.Component {
   render() {
     return (
       <div id="test">
-        <div onClick={() => {
-          console.log('click')
-          this.setState({text: 444})
-        }}>{this.state.text}</div>
+        <div
+          onClick={() => {
+            console.log('click')
+            this.setState({ text: 444 })
+          }}
+        >
+          {this.state.text}
+        </div>
         <div>{new Date().toLocaleTimeString()}</div>
         <input type="text" ref="input" value={this.state.value} />
-        <Test/>
+        <Test />
+        <ChildComponent />
       </div>
     )
   }

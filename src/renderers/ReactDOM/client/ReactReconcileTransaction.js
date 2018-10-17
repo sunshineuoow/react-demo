@@ -13,10 +13,20 @@ var EVENT_SUPPRESSION = {
   close: function() {}
 }
 
+/**
+ * 在这个transaction期间提供一个收集`componentDidMount`和`componentDidUpdate`回调队列
+ */
 var ON_DOM_READY_QUEUEING = {
+  /**
+   * 初始化内部的`onDOMReady`队列
+   */
   initialize: function() {
     this.reactMountReady.reset()
   },
+
+  /**
+   * DOM已经加载后，执行所有的注册的`onDOMReady`回调
+   */
   close: function() {
     this.reactMountReady.notifyAll()
   }
